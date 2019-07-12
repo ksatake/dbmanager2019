@@ -1,0 +1,306 @@
+
+<meta charset="UTF-8">
+
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+<script language=javascript>
+
+// DBテーブル名と、店舗名の対応表
+var BranchNameTable = { 'itemtable2': '店舗A', 'itemtable3': '店舗B','itemtable4': '店舗C' };
+
+// 初期で設定されているDBテーブル
+var TableName="itemtable2";
+
+// 設定店舗の変更
+function ChangeBranch()
+{
+	TableName=document.getElementById('branchselect').value;	
+	document.getElementById('validbranch').innerHTML=BranchNameTable[TableName];
+	getRequest();
+}
+
+// レコード削除
+function DelRecord(id) {
+	var ajax = new XMLHttpRequest();
+	ajax.open("delete", "./"+TableName+"/"+id);
+	ajax.send(); // 通信させます。
+	getRequest(); //削除後のデータ再読込
+}
+
+// 新規登録・または編集を行うフォーム送信時の処理
+function InsertOrUpdate()
+{	
+	// 入力不備に対して警告
+	if(document.getElementById('title').value == "" || document.getElementById('detail').value == ""  || document.getElementById('price').value == ""  ||  (document.getElementById("inputformtype").value=="insertrecord" && document.getElementById('fileupload').value == ""))
+	{
+        alert("必須項目を入力して下さい。");
+		return false;
+    }
+	//フォームデータ取得
+	var formData = new FormData(document.getElementById('recordform'));
+	
+	// XMLHttpRequest開始
+    var xhr = new XMLHttpRequest();
+
+	// 新規登録 (POST)
+	if(document.getElementById("inputformtype").value=="insertrecord")
+	{
+		    xhr.open('POST', './'+TableName, true);
+	}
+	// 更新 (PUT)
+	if(document.getElementById("inputformtype").value=="editrecord")
+	{
+		    xhr.open('PUT', './'+TableName+'/'+document.getElementById('editsigntag').value, true);
+	}	
+   // レスポンス受信時処理 
+    xhr.onreadystatechange = function() {    	
+    	//データ再取得        
+        getRequest();
+        
+        //フォームクリア
+        if(document.getElementById("inputformtype").value=="editrecord") editCancel();
+        if(document.getElementById("inputformtype").value=="insertrecord") ClearForm();
+    }
+    //入力内容送信
+    xhr.send(formData);
+}
+
+// データ検索フォーム送信時の処理
+function SearchDatas()
+{
+	console.log("SearchDatas");
+	
+
+	
+	var formData = new FormData(document.getElementById('searchform'));
+	
+	//
+	var param="";
+	
+	if(counter!=0){
+		param=param+"?";
+		
+		if(counter>1){
+			var comp= document.getElementById('searchform').elements['comp[]'];
+			var val= document.getElementById('searchform').elements['val[]'];
+			var colname= document.getElementById('searchform').elements['colname[]'];
+	
+			for (var i = 0; i < comp.length; i++) {
+
+				if(val[i].value=="")
+				{
+					alert("必須項目を入力して下さい。");
+					return false;
+				}
+				
+				param=param+"comp[]="+comp[i].value+"&"+"val[]="+val[i].value+"&"+"colname[]="+colname[i].value+"&";
+			}
+	
+			param = param.slice( 0, -1 ) ;
+		}else{
+			var comp= document.getElementById('compselect2').value;
+			var val= document.getElementById('value').value;
+			var colname= document.getElementById('colname').value;
+			
+			if(val=="")
+			{
+				alert("必須項目を入力して下さい。");
+				return false;
+			}
+			
+			param=param+"comp[]="+comp+"&"+"val[]="+val+"&"+"colname[]="+colname;
+		}
+	
+
+	}
+
+		console.log('./'+TableName+param);
+	
+    var xhr = new XMLHttpRequest();
+    	
+	xhr.open('GET', './'+TableName+param, true);
+
+
+
+
+    xhr.send(formData);
+		xhr.addEventListener("load", function(){ // loadイベントを登録します。
+			//console.log(this.response);
+			obj = JSON.parse(this.response);
+			console.log(obj);
+			console.log("responceEnd");
+			MakeDataTable(obj);
+		}, false);
+    
+    ////////
+
+
+    
+    
+}
+
+
+
+// 検索条件のフィルター数
+var counter=0;
+// 検索条件フィルターを追加or削除
+function Makefilteroption(plusminus)
+{
+	if(plusminus=="+") counter++;
+	if(plusminus=="-" && counter!=0) counter--;
+	
+	var oneofFilerHtml='<select id="colname" type="text" name="colname[]" style="float:left;"><option value="id">id</option><option value="title">title</option><option value="detail">detail</option><option value="price">price</option></select><span style="float:left;">が</span><input id="value" type="text" name="val[]" style="float:left;"><select id="compselect2" type="text" name="comp[]" style="float:left;"><option value="=">である</option><option value=">">より大きい</option><option value="<">より小さい</option></select><span style="float:left;">ものを検索</span><br/>';
+	
+	var filerHtml="";
+	for (var i = 0; i < counter; i++) {
+		filerHtml+=oneofFilerHtml;
+	}
+	
+	document.getElementById("filteroptionPlace").innerHTML=filerHtml;		  
+}
+
+// (編集時) 新規登録フォームを編集フォームに改変	
+function editRecordForm(thisid)
+{
+	// フォームの種類を変更
+	document.getElementById("inputformtype").value="editrecord";
+	
+	//thisidをPOSTで投げてくれるinputhiddenをformに追加。
+	document.getElementById("recordform").innerHTML+='<input id="editsigntag" type="hidden" name="id" value="'+thisid+'">';
+		
+	//	thisidのデータを、以下のeditrecordのところにそれぞれ入れる
+		
+	document.getElementById("title").value=document.getElementById(thisid+"title").innerHTML;
+	document.getElementById("detail").value=document.getElementById(thisid+"detail").innerHTML;
+	document.getElementById("price").value=document.getElementById(thisid+"price").innerHTML;
+	
+	document.getElementById("fileupload").removeAttribute("required");
+	
+	// 適宜、追加
+	document.getElementById("FormTitle").innerHTML="＜idが"+thisid+"のデータを編集＞";
+	document.getElementById("editCancelBtnPlace").innerHTML='<button id="editCancelBtn" onClick="editCancel()">編集をキャンセル</button>';
+	document.getElementById("picInputEx").innerHTML="画像(変更する場合のみ選択)";
+}
+
+// (編集を終了) 編集フォームを新規登録フォームに改変	
+function editCancel()
+{
+	document.getElementById("FormTitle").innerHTML="＜新規登録＞";
+	document.getElementById("editCancelBtn").remove();
+	document.getElementById("editsigntag").remove();
+	document.getElementById("inputformtype").value="insertrecord";
+
+	document.getElementById("title").value="";
+	document.getElementById("detail").value="";
+	document.getElementById("price").value="";
+	document.getElementById("fileupload").setAttribute("required","required");
+	document.getElementById("fileupload").value="";
+	document.getElementById("picInputEx").innerHTML="画像";		
+}
+
+//フォームの入力内容をリセット
+function ClearForm()
+{
+	document.getElementById("title").value="";
+	document.getElementById("detail").value="";
+	document.getElementById("price").value="";
+	document.getElementById("fileupload").value="";
+}
+
+// データレコード群から、それを表示するテーブルをHTMLで作成して設置	
+function MakeDataTable(obj)
+{
+	var tbl=$("<table border='1' />").attr("id","mytable");
+	$("#mytable").remove();
+    $("#div1").append(tbl);
+    $("#mytable").append("<tr><th>id</th><th>title</th><th>detail</th><th>price</th><th>picture</th></tr>"); 
+    for(var i=0;i<obj.length;i++)
+    {
+        var tr="<tr>";
+        var td1="<td>"+obj[i]["id"]+"</td>";
+        var td2='<td id="'+obj[i]["id"]+'title">'+obj[i]["title"]+'</td>';
+        var td3='<td id="'+obj[i]["id"]+'detail">'+obj[i]["detail"]+'</td>';
+        var td4='<td id="'+obj[i]["id"]+'price">'+obj[i]["price"]+'</td>';
+        var td5='<td><img src="data:image/png;base64,'+obj[i]["picture"]+'" width="70" height="70" alt="aa"></td>';
+		var td6='<td><button id="delBtn'+obj[i]["id"]+'" onClick="DelRecord('+obj[i]["id"]+');">delete</button></td>';
+		var td7='<td><button id="editBtn'+obj[i]["id"]+'" onClick="editRecordForm('+obj[i]["id"]+');">edit</button></td></tr>';
+       $("#mytable").append(tr+td1+td2+td3+td4+td5+td6+td7); 
+    }   
+}
+
+// データ一覧取得要求 (APIにGETリクエスト)
+function getRequest()
+{
+	var ajax = new XMLHttpRequest();
+	ajax.open("get", "./"+TableName+"/");
+	ajax.send(); // 通信させます。
+	ajax.addEventListener("load", function(){ // loadイベントを登録します。
+		//console.log(this.response);
+		obj = JSON.parse(this.response);
+		console.log(obj);
+		console.log("responceEnd");
+		MakeDataTable(obj);
+	}, false);
+}
+
+// ページロード時、一覧取得
+getRequest();
+
+</script>
+
+＜データ一覧＞
+<div id="div1"></div>
+<hr>
+
+＜検索条件 ＞
+<button onClick="Makefilteroption('+')">増やす</button>
+<button onClick="Makefilteroption('-')">減らす</button>
+<form id="searchform">
+  <input type="hidden" name="requesttype" value="search">	
+  <div id="filteroptionPlace"></div>
+</form>
+<button onClick="SearchDatas()">検索</button>
+※検索条件を指定せず検索すると、全データ表示
+<hr>
+
+<div id="FormTitle">＜新規登録＞</div>
+<form id="recordform" enctype="multipart/form-data" name="actform">
+  <input id="inputformtype" type="hidden" name="requesttype" value="insertrecord"  required>
+  <label class="label" for="title">タイトル</label>
+  <input id="title" type="text" name="title" maxlength='100' required>
+  <label class="label" for="detail">説明</label>
+  <input id="detail" type="text" name="detail" maxlength='500'  required>
+  <label class="label" for="price">価格</label>
+  <input type="number" id="price" type="text" name="price"  required></input>
+  <label id="picInputEx">画像</label>
+  <input type="file" name="upfile"  id="fileupload" required>  
+  <span id="editCancelBtnPlace"></span>
+</form>
+<button onClick="InsertOrUpdate()">送信</button>
+<hr>
+
+＜店舗選択＞ (現在選択されている店舗: <span id="validbranch"></span>)
+<form id="branchselectform">
+<select id="branchselect" type="text" name="branch">
+	<option value="itemtable2">店舗A</option>
+	<option value="itemtable3">店舗B</option>
+	<option value="itemtable4">店舗C</option>
+</select>
+</form>
+<button onClick="ChangeBranch()">送信</button>
+<hr>
+
+
+
+
+<style>
+label, input[type=text]{
+ display:block;
+}
+</style>
+
+
+<script>	
+//editrecord("80");	
+//DelRecord("100");
+document.getElementById('validbranch').innerHTML=BranchNameTable[TableName];
+</script>	
